@@ -67,6 +67,7 @@ class AutoIncColumnType(val delegate: ColumnType, private val _autoincSeq: Strin
 
     private fun resolveAutIncType(columnType: IColumnType) : String = when (columnType) {
         is EntityIDColumnType<*> -> resolveAutIncType(columnType.idColumn.columnType)
+        is WrapperColumnType<*, *> -> resolveAutIncType(columnType.rawColumnType)
         is IntegerColumnType -> currentDialect.dataTypeProvider.shortAutoincType()
         is LongColumnType -> currentDialect.dataTypeProvider.longAutoincType()
         else -> error("Unsupported type $delegate for auto-increment")
@@ -75,7 +76,11 @@ class AutoIncColumnType(val delegate: ColumnType, private val _autoincSeq: Strin
     override fun sqlType(): String = resolveAutIncType(delegate)
 }
 
-val IColumnType.isAutoInc: Boolean get() = this is AutoIncColumnType || (this is EntityIDColumnType<*> && idColumn.columnType.isAutoInc)
+val IColumnType.isAutoInc: Boolean get() =
+    this is AutoIncColumnType
+            || (this is EntityIDColumnType<*> && idColumn.columnType.isAutoInc)
+            || (this is WrapperColumnType<*, *> && rawColumnType.isAutoInc)
+
 val Column<*>.autoIncSeqName : String? get() {
         return (columnType as? AutoIncColumnType)?.autoincSeq
             ?: (columnType as? EntityIDColumnType<*>)?.idColumn?.autoIncSeqName
@@ -394,12 +399,14 @@ class UUIDColumnType : ColumnType() {
 
 @Suppress("UNCHECKED_CAST")
 class WrapperColumnType<Raw : Any, Wrapper : Any>(
-    protected val rawColumnType: IColumnType,
-    protected val rawKClass: KClass<Raw>,
-    protected val wrapperKClass: KClass<Wrapper>,
-    protected val instanceCreator: (Raw) -> Wrapper,
-    protected val valueExtractor: (Wrapper) -> Raw
-) : IColumnType by rawColumnType {
+    val rawColumnType: IColumnType,
+    private val rawKClass: KClass<Raw>,
+    private val wrapperKClass: KClass<Wrapper>,
+    private val instanceCreator: (Raw) -> Wrapper,
+    private val valueExtractor: (Wrapper) -> Raw
+) : ColumnType() {
+
+    override fun sqlType() = rawColumnType.sqlType()
 
     override fun valueFromDB(value: Any) = rawColumnType.valueFromDB(value).let { rawValue ->
         when {
@@ -419,5 +426,5 @@ class WrapperColumnType<Raw : Any, Wrapper : Any>(
     }
 
     override fun toString() =
-        "WrapperColumnType(rawColumnType=$rawColumnType, rawClazz=$rawKClass, wrapperClazz=$wrapperKClass)"
+        "WrapperColumnType(rawColumnType=$rawColumnType, rawKClass=$rawKClass, wrapperKClass=$wrapperKClass)"
 }

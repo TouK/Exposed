@@ -14,7 +14,8 @@ class WrapperColumnTest : DatabaseTestsBase() {
     data class IdWrapper(val value: Long)
 
     object TestTable : Table() {
-        val idWrapper = long("id_wrapper").autoIncrement().primaryKey().wrapping(::IdWrapper, IdWrapper::value)
+//        val idWrapper = long("id_wrapper").wrapping(::IdWrapper, IdWrapper::value).autoIncrement().primaryKey()
+        val idWrapper = long("id_wrapper").autoIncrement().wrapping(::IdWrapper, IdWrapper::value).primaryKey()
         val stringWrapper = text("string_wrapper").wrapping(::StringWrapper, StringWrapper::value)
         val intWrapper = integer("int_wrapper").wrapping(::IntWrapper, IntWrapper::value).nullable()
     }
@@ -54,7 +55,7 @@ class WrapperColumnTest : DatabaseTestsBase() {
 
                 val row2 = TestTable.select { TestTable.idWrapper eq checkNotNull(id2) }.single()
 
-                assertEquals(checkNotNull(id1), row2[TestTable.idWrapper])
+                assertEquals(checkNotNull(id2), row2[TestTable.idWrapper])
                 assertEquals(aStringWrapper, row2[TestTable.stringWrapper])
                 assertEquals(null, row2[TestTable.intWrapper])
             }
