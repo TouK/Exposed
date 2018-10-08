@@ -19,6 +19,7 @@ import java.sql.ResultSet
 import java.sql.Types
 import java.util.*
 import javax.sql.rowset.serial.SerialBlob
+import kotlin.reflect.KClass
 
 interface IColumnType {
     var nullable: Boolean
@@ -389,4 +390,34 @@ class UUIDColumnType : ColumnType() {
         else -> error("Unexpected value of type UUID: $value of ${value::class.qualifiedName}")
     }
 
+}
+
+@Suppress("UNCHECKED_CAST")
+class WrapperColumnType<Raw : Any, Wrapper : Any>(
+    protected val rawColumnType: IColumnType,
+    protected val rawKClass: KClass<Raw>,
+    protected val wrapperKClass: KClass<Wrapper>,
+    protected val instanceCreator: (Raw) -> Wrapper,
+    protected val valueExtractor: (Wrapper) -> Raw
+) : IColumnType by rawColumnType {
+
+    override fun valueFromDB(value: Any) = rawColumnType.valueFromDB(value).let { rawValue ->
+        when {
+            rawKClass.isInstance(rawValue) -> instanceCreator(rawValue as Raw)
+            else -> error("Raw value from database $rawValue of class ${rawValue::class.qualifiedName} is not valid $rawKClass")
+        }
+    }
+
+    override fun notNullValueToDB(value: Any) = when {
+        wrapperKClass.isInstance(value) -> rawColumnType.notNullValueToDB(valueExtractor(value as Wrapper))
+        else -> error("Wrapper value $value of class ${value::class.qualifiedName} is not valid $wrapperKClass")
+    }
+
+    override fun nonNullValueToString(value: Any) = when {
+        wrapperKClass.isInstance(value) -> rawColumnType.nonNullValueToString(valueExtractor(value as Wrapper))
+        else -> error("Raw value $value of class ${value::class.qualifiedName} is not valid $wrapperKClass")
+    }
+
+    override fun toString() =
+        "WrapperColumnType(rawColumnType=$rawColumnType, rawClazz=$rawKClass, wrapperClazz=$wrapperKClass)"
 }

@@ -354,6 +354,15 @@ open class Table(name: String = ""): ColumnSet(), DdlAware {
      */
     fun varchar(name: String, length: Int, collate: String? = null): Column<String> = registerColumn(name, VarCharColumnType(length, collate))
 
+    @Suppress("UNCHECKED_CAST")
+    fun <Raw : Any, Wrapper : Any> Column<Raw>.wrapping(rawKClass: KClass<Raw>, wrapperKClass: KClass<Wrapper>, instanceCreator: (Raw) -> Wrapper, valueExtractor: (Wrapper) -> Raw): Column<Wrapper> =
+        clone<Column<Raw>>(mapOf(Column<Raw>::columnType to WrapperColumnType(columnType, rawKClass, wrapperKClass, instanceCreator, valueExtractor))).run {
+            replaceColumn(this@wrapping, this as Column<Wrapper>)
+        }
+
+    inline fun <reified Raw : Any, reified Wrapper : Any> Column<Raw>.wrapping(noinline instanceCreator: (Raw) -> Wrapper, noinline valueExtractor: (Wrapper) -> Raw): Column<Wrapper> =
+        wrapping(Raw::class, Wrapper::class, instanceCreator, valueExtractor)
+
     private fun <T> Column<T>.cloneWithAutoInc(idSeqName: String?) : Column<T> = when(columnType) {
         is AutoIncColumnType -> this
         is ColumnType ->
